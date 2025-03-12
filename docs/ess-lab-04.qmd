@@ -1,0 +1,357 @@
+---
+title: "Lab 4: LTER Network Data"
+author: "Melissa May"
+date: "2025-03-14"
+format: html
+execute: 
+  echo: true
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+# Part 1: Univariate and Bivariate Statistics
+
+## Installing **lterdatasampler**
+
+```{r}
+remotes::install_github("lter/lterdatasampler")
+```
+
+## Loading in libraries
+
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(lterdatasampler)
+library(car)
+library(visdat)
+```
+
+## Retrieving **and_vertebrates**
+
+```{r}
+?and_vertebrates
+
+data("and_vertebrates")
+```
+
+## Exploring **and_vertebrates**
+
+```{r}
+glimpse(and_vertebrates)
+```
+
+```{r}
+vis_dat(and_vertebrates)
+```
+
+## Chi-Square: Categorical Analysis
+
+```{r}
+and_vertebrates |> 
+  filter(species == "Cutthroat trout") |>
+  drop_na(unittype) |>
+  count(unittype)
+```
+
+```{r}
+trout_clean <- and_vertebrates  |>
+  filter(species == "Cutthroat trout") |> 
+  filter(unittype %in% c("C", "P", "SC")) |> 
+  drop_na(unittype, section)
+
+cont_table <- table(trout_clean$section, trout_clean$unittype)
+
+chisq.test(cont_table)
+```
+
+```{r}
+trout_clean  |>  
+  count(unittype, section)  |>  
+  ggpubr::ggbarplot(x = 'unittype', y = 'n', 
+                    fill = 'section', 
+                    palette = c("#00AFBB", "#E7B800"),
+                    add = "mean_se")
+```
+
+##T-Test: Compare Two Means
+
+```{r}
+trout_clean |> 
+  drop_na(weight_g) |> 
+  ggpubr::ggviolin(x = "section", 
+                   y     = "weight_g", 
+                   add   = "boxplot",
+                   color = "section",
+                   palette = c("#00AFBB", "#E7B800"))
+```
+
+```{r}
+cc_weight <- trout_clean |> 
+  filter(section == "CC") |> 
+  pull(weight_g)
+
+og_weight <- trout_clean |> 
+  filter(section == "OG") |> 
+  pull(weight_g)
+
+var.test(cc_weight, og_weight)
+```
+
+```{r}
+ggpubr::ggarrange(ggpubr::gghistogram(cc_weight, main = "Clear Cut"), 
+              ggpubr::gghistogram(og_weight, main = "Old Growth"))
+```
+
+```{r}
+var.test(log(cc_weight), log(og_weight))
+```
+
+```{r}
+t.test(log(trout_clean$weight_g) ~ trout_clean$section, var.equal = TRUE)
+```
+
+```{r}
+t.test(trout_clean$weight_g ~ trout_clean$section, var.equal = FALSE)
+```
+
+```{r}
+sally_clean <- and_vertebrates |> 
+  filter(species == "Coastal giant salamander") |> 
+  drop_na(length_2_mm, weight_g)
+
+ggarrange(gghistogram(sally_clean$length_2_mm, title = "Length"),
+gghistogram(sally_clean$weight_g, title = "Weight"))
+```
+
+```{r}
+s <- sally_clean |> 
+  slice_sample(n = 5000) 
+
+shapiro.test(s$length_2_mm)
+
+shapiro.test(s$weight_g)
+```
+
+```{r}
+ggarrange(
+ gghistogram(log(sally_clean$length_2_mm), title = "Length"), 
+ gghistogram(log(sally_clean$weight_g), title = "Weight") )
+```
+
+```{r}
+cor.test(log(sally_clean$length_2_mm), log(sally_clean$weight_g))
+```
+
+```{r}
+sally_clean |> 
+  mutate(log_length = log(length_2_mm), log_weight = log(weight_g)) |> 
+  ggscatter(x = 'log_length', 
+            y = 'log_weight', 
+            alpha = .35,
+            add = "loess")
+
+cor.test(sally_clean$length_2_mm, sally_clean$weight_g, method = "spearman")
+```
+
+# Exercises: Part 1
+
+## Question 1:
+
+```{r}
+salamander_data <- and_vertebrates %>%
+  filter(species == "Coastal giant salamander")
+
+salamander_table <- table(salamander_data$section, salamander_data$unittype)
+
+chi_result <- chisq.test(salamander_table)
+chi_result
+```
+
+## Question 2:
+
+```{r}
+biomass_data <- and_vertebrates %>%
+  filter(species == "Coastal giant salamander", section %in% c("CC", "OG"))
+
+t_test_result <- t.test(weight_g ~ section, data = biomass_data)
+
+print(t_test_result)
+```
+
+## Question 3:
+
+```{r}
+summary(and_vertebrates[, c("length_1_mm", "length_2_mm")])
+```
+
+```{r}
+trout_data <- and_vertebrates %>%
+  filter(species == "Cutthroat trout")
+
+correlation_result <- cor.test(trout_data$length_1_mm, trout_data$weight_g, use = "complete.obs")
+
+print(correlation_result)
+```
+
+# Part 2: Multivariate Statistics
+
+## Installing **car**
+```{r}
+install.packages("car")
+??car
+```
+
+## Loading the data
+```{r}
+data("pie_crab")
+```
+
+## Exploring the data
+```{r}
+glimpse(pie_crab)
+```
+
+```{r}
+vis_dat(pie_crab)
+```
+
+```{r}
+?pie_crab
+```
+
+```{r}
+count(pie_crab, site)
+```
+
+```{r}
+summary(pie_crab)
+```
+
+## ANOVA
+```{r}
+pie_crab |> 
+  ggboxplot(x = 'site', y = 'size', col = 'site') +
+  geom_jitter(size =.25) + 
+  theme(legend.postition = "none")
+```
+
+```{r}
+norms <- pie_crab |> 
+  nest(data = -site) |>
+  mutate(Shapiro = map(data, ~ shapiro.test(.x$size)),
+         n = map_dbl(data, nrow),
+         glance_shapiro = map(Shapiro, broom::glance)) |>
+  unnest(glance_shapiro)
+
+flextable::flextable(dplyr::select(norms, site, n, statistic, p.value)) |>
+  flextable::set_caption("Shapiro-Wilk normality test for size at each site")
+```
+
+```{r}
+(res_aov <- aov(size ~ site, data = pie_crab))
+```
+
+```{r}
+gghistogram(res_aov$residuals)
+```
+```{r}
+shapiro.test(res_aov$residuals)
+```
+
+```{r}
+leveneTest(size ~ site, data = pie_crab)
+```
+
+```{r}
+oneway.test(size ~ site, data = pie_crab, var.equal = FALSE)
+```
+
+```{r}
+pie_sites <- pie_crab |> 
+  filter(site %in% c("GTM", "DB", "PIE"))
+
+leveneTest(size ~ site, data = pie_sites)
+```
+
+```{r}
+pie_anova <- aov(size ~ site, data = pie_sites)
+
+summary(pie_anova)
+```
+
+## Post-Hoc Tukey's HSD Test
+
+```{r}
+TukeyHSD(pie_anova)
+```
+
+```{r}
+pie_lm <- lm(size ~ latitude, data = pie_crab)
+
+summary(pie_lm)
+```
+
+```{r}
+pie_crab |> 
+  ggscatter(x = 'latitude', y = 'size', 
+            alpha = .35, 
+            add = "reg.line")
+```
+## Predictions Using a Regression Model
+```{r}
+new_lat <- data.frame(latitude = c(32, 36, 38))
+
+broom::augment(pie_lm, newdata = new_lat)
+```
+
+## Multiple Linear Regression
+```{r}
+pie_mlm <- lm(size ~ latitude + air_temp + water_temp, data = pie_crab)
+
+summary(pie_mlm)
+```
+
+```{r}
+pie_crab |> 
+  dplyr::select(latitude, air_temp, water_temp) |> 
+  cor()
+```
+
+# Exercises: Part 2
+
+## Question 1:
+```{r}
+library(ggplot2)
+
+pie_crab$site <- reorder(pie_crab$site, pie_crab$latitude, FUN = mean)
+
+ggplot(pie_crab, aes(x = site, y = size)) +
+  geom_boxplot() +
+  labs(x = "Site (Ordered by Latitude)", y = "Carapace Width (mm)", title = "Carapace Width by Site") +
+  theme_minimal()
+```
+
+## Question 2:
+```{r}
+lm_water <- lm(size ~ water_temp_sd, data = pie_crab)
+
+summary(lm_water)
+
+ggplot(pie_crab, aes(x = water_temp_sd, y = size)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", col = "blue") +
+  labs(x = "Water Temp SD", y = "Carapace Width", title = "Effect of Water Temp SD on Carapace Width") +
+  theme_minimal()
+```
+
+## Question 3:
+```{r}
+cor_matrix <- cor(pie_crab[, c("latitude", "air_temp_sd", "water_temp_sd")])
+print(cor_matrix)
+
+lm_multiple <- lm(size ~ latitude + air_temp_sd + water_temp_sd, data = pie_crab)
+
+summary(lm_multiple)
+```
