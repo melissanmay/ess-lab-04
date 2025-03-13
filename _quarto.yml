@@ -1,8 +1,5 @@
 project: 
   title: "Lab #4: LTER Network Data"
-  author:
-    - name: Melissa May
-      email: melmay@colostate.edu
   output-dir: docs
   type: website
 
